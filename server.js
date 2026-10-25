@@ -7,9 +7,11 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ---- Supabase 客户端（未配置时自动降级为内存存储） ----
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || '';
+// ---- Supabase 客户端（环境变量优先，内置默认配置兜底） ----
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://rcxjvsgqghjqalqceyca.supabase.co';
+const SUPABASE_KEY =
+  process.env.SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjeGp2c2dxZ2hqcWFscWNleWNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5MTcwNjQsImV4cCI6MjEwODQ5MzA2NH0.Pd0TKuQ8f1LAUI9FZGtYzfIcpyXZH8xtjn8eZHRpIEw';
 let supabase = null;
 if (SUPABASE_URL && SUPABASE_KEY) {
   supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -98,5 +100,10 @@ app.delete('/api/tasks/:id', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✓ 任务管理系统已启动: http://localhost:${PORT}`));
+// 本地运行时启动监听；Vercel Serverless 环境下导出 app
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => console.log(`✓ 任务管理系统已启动: http://localhost:${PORT}`));
+}
+
+module.exports = app;
