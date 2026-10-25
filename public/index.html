@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>智能任务管理系统</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh; display: flex; justify-content: center; padding: 40px 16px;
+  }
+  .container { width: 100%; max-width: 640px; }
+  .card {
+    background: #fff; border-radius: 16px; padding: 28px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  }
+  h1 { font-size: 22px; color: #333; text-align: center; margin-bottom: 6px; }
+  .subtitle { text-align: center; color: #999; font-size: 13px; margin-bottom: 22px; }
+  .add-row { display: flex; gap: 10px; margin-bottom: 18px; }
+  .add-row input[type=text] {
+    flex: 1; padding: 12px 14px; border: 2px solid #e5e7eb; border-radius: 10px;
+    font-size: 15px; outline: none; transition: border-color .2s;
+  }
+  .add-row input[type=text]:focus { border-color: #667eea; }
+  select {
+    padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px;
+    outline: none; background: #fff; cursor: pointer;
+  }
+  .btn-add {
+    padding: 12px 22px; border: none; border-radius: 10px; cursor: pointer;
+    background: linear-gradient(135deg, #667eea, #764ba2); color: #fff;
+    font-size: 15px; font-weight: 600; transition: opacity .2s;
+  }
+  .btn-add:hover { opacity: .88; }
+  .filters { display: flex; gap: 8px; margin-bottom: 16px; }
+  .filters button {
+    flex: 1; padding: 9px 0; border: 1.5px solid #e5e7eb; border-radius: 8px;
+    background: #fff; color: #666; font-size: 14px; cursor: pointer; transition: all .15s;
+  }
+  .filters button.active { background: #667eea; border-color: #667eea; color: #fff; font-weight: 600; }
+  .task-list { list-style: none; }
+  .task {
+    display: flex; align-items: center; gap: 12px; padding: 14px 12px;
+    border-bottom: 1px solid #f1f2f4; animation: fadeIn .25s;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+  .task:last-child { border-bottom: none; }
+  .task .title { flex: 1; font-size: 15px; color: #333; word-break: break-all; }
+  .task.done .title { text-decoration: line-through; color: #b0b3b8; }
+  .badge {
+    font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; font-weight: 500;
+  }
+  .badge.high   { background: #fee2e2; color: #dc2626; }
+  .badge.medium { background: #fef3c7; color: #d97706; }
+  .badge.low    { background: #dcfce7; color: #16a34a; }
+  .time { font-size: 11px; color: #c0c3c8; white-space: nowrap; }
+  .btn {
+    padding: 6px 12px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 13px; transition: opacity .15s; white-space: nowrap;
+  }
+  .btn:hover { opacity: .8; }
+  .btn-toggle { background: #eef2ff; color: #4f46e5; }
+  .btn-toggle.done-btn { background: #f3f4f6; color: #6b7280; }
+  .btn-del { background: #fef2f2; color: #ef4444; }
+  .empty { text-align: center; color: #b6b9be; padding: 40px 0; font-size: 14px; }
+  .stats { margin-top: 14px; text-align: center; color: #9ca3af; font-size: 13px; }
+  .mode-tag {
+    display: inline-block; margin-top: 10px; font-size: 11px; color: #9ca3af;
+    background: #f3f4f6; padding: 2px 10px; border-radius: 999px;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>📋 智能任务管理系统</h1>
+      <p class="subtitle">高效记录 · 优先级管理 · 轻松追踪进度</p>
+
+      <div class="add-row">
+        <input type="text" id="taskInput" placeholder="请输入任务标题…" maxlength="100" />
+        <select id="prioritySelect">
+          <option value="high">高优先级</option>
+          <option value="medium" selected>中优先级</option>
+          <option value="low">低优先级</option>
+        </select>
+        <button class="btn-add" onclick="addTask()">添加</button>
+      </div>
+
+      <div class="filters" id="filters">
+        <button data-f="all" class="active">全部</button>
+        <button data-f="high">高优先级</button>
+        <button data-f="medium">中优先级</button>
+        <button data-f="low">低优先级</button>
+      </div>
+
+      <ul class="task-list" id="taskList"></ul>
+      <div class="stats" id="stats"></div>
+      <div style="text-align:center"><span class="mode-tag" id="modeTag"></span></div>
+    </div>
+  </div>
+
+<script>
+const PRIORITY_TEXT = { high: '高', medium: '中', low: '低' };
+let tasks = [];
+let filter = 'all';
+
+const $ = (id) => document.getElementById(id);
+const api = (url, opt) => fetch(url, opt).then(r => r.json());
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getMonth()+1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+async function loadTasks() {
+  const res = await api('/api/tasks');
+  tasks = res.data || [];
+  $('modeTag').textContent = res.mode === 'supabase' ? '数据存储：Supabase 数据库' : '数据存储：本地内存（未配置 Supabase）';
+  render();
+}
+
+async function addTask() {
+  const input = $('taskInput');
+  const title = input.value.trim();
+  if (!title) { input.focus(); return alert('请输入任务标题'); }
+  await api('/api/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, priority: $('prioritySelect').value })
+  });
+  input.value = '';
+  loadTasks();
+}
+
+async function toggleTask(id, done) {
+  await api(`/api/tasks/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ done: !done })
+  });
+  loadTasks();
+}
+
+async function deleteTask(id) {
+  if (!confirm('确定删除这条任务吗？')) return;
+  await api(`/api/tasks/${id}`, { method: 'DELETE' });
+  loadTasks();
+}
+
+function render() {
+  const list = $('taskList');
+  const shown = tasks.filter(t => filter === 'all' || t.priority === filter);
+  if (!shown.length) {
+    list.innerHTML = '<li class="empty">暂无任务，快去添加一个吧 ✨</li>';
+  } else {
+    list.innerHTML = shown.map(t => `
+      <li class="task ${t.done ? 'done' : ''}">
+        <span class="badge ${t.priority}">${PRIORITY_TEXT[t.priority]}优先级</span>
+        <span class="title">${t.title.replace(/</g,'&lt;')}</span>
+        <span class="time">${fmtTime(t.created_at)}</span>
+        <button class="btn btn-toggle ${t.done ? 'done-btn' : ''}" onclick="toggleTask(${t.id}, ${t.done})">${t.done ? '未完成' : '完成'}</button>
+        <button class="btn btn-del" onclick="deleteTask(${t.id})">删除</button>
+      </li>`).join('');
+  }
+  const doneCount = tasks.filter(t => t.done).length;
+  $('stats').textContent = tasks.length
+    ? `共 ${tasks.length} 条任务，已完成 ${doneCount} 条，未完成 ${tasks.length - doneCount} 条`
+    : '';
+}
+
+$('filters').addEventListener('click', (e) => {
+  if (e.target.tagName !== 'BUTTON') return;
+  filter = e.target.dataset.f;
+  document.querySelectorAll('#filters button').forEach(b => b.classList.toggle('active', b === e.target));
+  render();
+});
+$('taskInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTask(); });
+
+loadTasks();
+</script>
+</body>
+</html>
